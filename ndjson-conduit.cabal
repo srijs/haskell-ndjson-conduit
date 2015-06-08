@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                ndjson-conduit
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Conduit-based parsing and serialization for newline delimited JSON.
 homepage:            https://github.com/srijs/haskell-ndjson-conduit
 license:             MIT
