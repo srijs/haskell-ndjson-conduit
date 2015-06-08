@@ -32,20 +32,17 @@ import Data.Monoid
 carriage = fromIntegral $ fromEnum '\r'
 newline = fromIntegral $ fromEnum '\n'
 
+await' f = await >>= maybe (return ()) f
+
 -- | Consumes a stream of serializable values, and provides a stream of bytestrings.
 serializer :: (Monad m, A.ToJSON a) => Conduit a m B.ByteString
 serializer = mapInput A.toJSON (const Nothing) valueSerializer
 
 -- | Consumes a stream of aeson values, and provides a stream of bytestrings.
 valueSerializer :: Monad m => Conduit A.Value m B.ByteString
-valueSerializer = do
-  val <- await
-  case val of
-    Nothing -> return ()
-    Just val' -> do
-      mapM_ yield $ B.toChunks $ B.toLazyByteString $
-        A.encodeToByteStringBuilder val' <> B.word8 carriage <> B.word8 newline
-      valueSerializer
+valueSerializer = await' $ (>> valueSerializer) . yieldBuilder . build
+  where yieldBuilder = mapM_ yield . B.toChunks . B.toLazyByteString
+        build a = A.encodeToByteStringBuilder a <> B.word8 carriage <> B.word8 newline
 
 -- | Consumes a stream of bytestrings, and provides a stream of parsed values,
 --   ignoring all parse errors.
@@ -79,22 +76,12 @@ eitherValueParser = mapOutput eitherResult resultValueParser
 
 -- | Consumes a stream of bytestrings, and provides a stream of parse results.
 resultValueParser :: Monad m => Conduit B.ByteString m (Result A.Value)
-resultValueParser = chunked (parse A.json B.empty)
-  where
-    chunked iresult = do
-      val <- await
-      case val of
-        Nothing -> return ()
-        Just val' -> do
-          case B.split newline (B.filter (/=carriage) val') of
-            [] -> chunked iresult
-            (head:rest) ->
-              case rest of
-                [] -> chunked (feed iresult head)
-                (head':rest') -> do
-                  yield (feed iresult head')
-                  case rest' of
-                    [] -> resultValueParser
-                    _ -> do
-                      mapM_ yield (map (parse A.json) (init rest'))
-                      chunked (parse A.json (last rest'))
+resultValueParser = go (parse A.json B.empty)
+  where go r = await' $ (>>= go) . proc . split
+          where proc [] = return r
+                proc [c] = return (feed r c)
+                proc (c:cs) = do
+                  yield (feed r c)
+                  mapM_ yield (map (parse A.json) (init cs))
+                  return (parse A.json (last cs))
+        split = B.split newline . B.filter (/=carriage)
