@@ -39,17 +39,12 @@ await' f = await >>= maybe (return ()) f
 serializer :: (Monad m, A.ToJSON a) => Conduit a m B.ByteString
 serializer = mapInput A.toJSON (const Nothing) valueSerializer
 
-#if MIN_VERSION_aeson(0,10,0)
-encodeToBuilder = A.encodeToBuilder
-#else
-encodeToBuilder = A.encodeToByteStringBuilder
-#endif
 
 -- | Consumes a stream of aeson values, and provides a stream of bytestrings.
 valueSerializer :: Monad m => Conduit A.Value m B.ByteString
 valueSerializer = await' $ (>> valueSerializer) . yieldBuilder . build
   where yieldBuilder = mapM_ yield . B.toChunks . B.toLazyByteString
-        build a = encodeToBuilder a <> B.word8 carriage <> B.word8 newline
+        build a = B.lazyByteString (A.encode a) <> B.word8 carriage <> B.word8 newline
 
 -- | Consumes a stream of bytestrings, and provides a stream of parsed values,
 --   ignoring all parse errors.
