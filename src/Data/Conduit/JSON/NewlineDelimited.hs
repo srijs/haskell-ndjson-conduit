@@ -22,7 +22,6 @@ module Data.Conduit.JSON.NewlineDelimited
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
-import qualified Data.Aeson.Encode as A
 import Data.Attoparsec.ByteString
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as B (toChunks)
